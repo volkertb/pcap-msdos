@@ -1,0 +1,104 @@
+*****************************************************************************
+*                                                                           *
+*                        JENSEN FAST ETHERNET CARD                          *
+*                                                                           *
+*                      Driver Installation for LINUX                        *
+*                                                                           *
+*****************************************************************************
+
+Below are the instructions for installing linux driver. You must complie the
+source code to generate rtl8139.o and use "insmod" to insert rtl8139.o as module.
+You can use "netconfig" utilities to setup network parameters for the driver.
+
+Files Description:
+==================
+rtl8139.c  The adapter source code. You can download the newest version from
+           http://cesdis.gsfc.nasa.gov/linux/drivers/rtl8139.html  or
+           ftp://cesdis.gsfc.nasa.gov/pub/linux/drivers/rtl8139.c
+trans      Compile batch file.
+linux.txt  This file.
+
+Installation:
+=============
+1. Plug Jensen Fast Ethernet Card into PC's PCI-bus slot.
+
+2. Boot into LINUX and keyin the following commands at the LINUX prompt.
+   Remember, LINUX is case sensitive.
+
+      mkdir /temp
+      mcopy a:/linux/rtl8139.c /temp
+            (Copied from LINUX directory of the driver diskette.)
+            ("mcopy" is the mtools. If you don't have mtools, you can
+             mount -t msdos /dev/fd0 /mnt and use cp command)
+      mcopy a:/linux/trans /temp
+      cd /temp
+      chmod 777 trans
+
+3. Run trans file to complie and copy driver to linux source code:
+
+      /temp/trans
+
+      (rtl8139.o will be generated and be copied to /usr/src/linux/modules.)
+
+4. Run netconfig (or netcfg) to set you network parameter (like ip, gateway).
+
+   Slackware: Run "netconfig" to configure IP environment.
+              This will create '/etc/rc.d/rc.inet1' and 'rc.inet2' files.
+
+      netconfig
+
+
+   RedHat:
+   - Add "alias eth0 rtl8139" into the /etc/conf.modules file.
+      cd /etc
+      vi conf.modules
+         alias eth0 rtl8139
+
+   - Run "netcfg" in the xterm of X-window to configure IP environment.
+      startx
+      netcfg
+      (Configure IP of eth0 and enable "Activate interface at boot time".)
+
+
+5. Use editor vi to modify 'rc.inet1'(or 'rc') in the /etc/rc.d directory to
+   insmod driver.  This file will be run at boot time. You just add a line
+   at the beginning of 'rc.inet1'(or 'rc').
+
+   Slackware:
+      cd /etc/rc.d
+      vi rc.inet1
+         insmod /usr/src/linux/modules/rtl8139.o
+
+   RedHat: Add a line at the beginning of 'rc' file.
+      cd /etc/rc.d
+      vi rc
+         insmod /usr/src/linux/modules/rtl8139.o
+
+6. Reboot the LINUX.
+
+      reboot    ( or shutdown -r now )
+
+   When system boots, the driver will be loaded. Then the driver will
+   scan I/O port to see if a card is there.
+   (You can run 'dmesg' to see the boot message.)
+
+7. Run 'ifconfig' or 'netstat -i' to see if there is a interface 'eth0'.
+
+
+Note:
+   Make sure that your kernel is built with network, fast_ethernet and module
+   support. Otherwise, you have to rebuild your kernel.
+
+   (1) Go to /usr/src/linux directory
+   (2) Run 'make menuconfig' or 'make config'
+   (3) Mark the options list above.
+   (4) Exit and rebuild your kernel.
+       make dep;make clean;make zImage
+       The file 'zImage' will be at /usr/src/linux/arch/i386/boot/zImage
+   (5) Modify /etc/lilo.conf. (This file specify where kernel image is)
+   (6) Run 'lilo'.
+
+----
+All trademarks or brand names mentioned are properties
+of their respective companies.
+

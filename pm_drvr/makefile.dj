@@ -1,0 +1,337 @@
+#
+# GNU Makefile for Protected-mode Ethernet drivers (djgpp)
+#
+
+include ../common.dj
+
+MAKE_MAPFILE = 0
+
+CFLAGS += -I../.. -DDEBUG -DEL_DEBUG=6 -DNET_DEBUG=6 -DVORTEX_DEBUG=6 \
+          -DETH16I_DEBUG=6 -DETHPK_DEBUG=6 -DAPRICOT_DEBUG=6          \
+          -DAT17_DEBUG=6 -DDE4X5_DEBUG=6 -DDE600_DEBUG=6              \
+          -DDE620_DEBUG=6 -DDEFXX_DEBUG=6 -DEWRK3_DEBUG=6             \
+          -DSMC_DEBUG=6 -DPCMCIA_DEBUG=2 -DTC90XBC_DEBUG=1            \
+          -DSUPPORT_NE_BAD_CLONES -DNE_SANITY_CHECK -DCONFIG_PCI      \
+          -DNE8390_RW_BUGFIX -DCONFIG_PCI_OPTIMIZE -DCONFIG_PCI_QUIRKS
+
+CORE_SRC = printk.c lock.c irq.c dma.c pci.c pci-scan.c bios32.c \
+           quirks.c timer.c kmalloc.c net_init.c
+
+DRVR_SRC = eth16i.c eepro.c apricot.c at1700.c cs89x0.c e2100.c    \
+           3c501.c 3c503.c 3c505.c 3c507.c 3c509.c 3c515.c 3c59x.c \
+           3c575_cb.c 3c90x.c 3c990.c 8390.c de600.c de620.c ne.c  \
+           wd.c accton.c rtl8139.c ne2k-pci.c # airo.c defxx.c
+
+#
+# Only used for 'make depend'
+#
+SOURCES  = $(CORE_SRC) $(DRVR_SRC)
+
+CORE_OBJ = $(CORE_SRC:.c=.o) intwrap.o
+DRVR_OBJ = $(DRVR_SRC:.c=.o)
+
+DRIVERS  = 3c501.wlm 3c503.wlm 3c505.wlm 3c509.wlm 3c515.wlm 3c59x.wlm
+DRIVERS  = 3c501.wlm 3c509.wlm airo.wlm
+
+TEST_PROG= el_test.exe pprobe.exe dxe_run.exe timtest.exe
+
+
+WLM_LINK  = dxe3gen -U -D "DOS-libpcap module"
+WLM_ARGS = $(GCC_LIB)
+
+ifeq ($(MAKE_MAPFILE),1)
+  EXE_LINK  = redir -e $*.map $(CC) -Wl,--print-map,--sort-common,--cref
+  WLM_ARGS += -Wl,--print-map,--sort-common,--cref > $*.map
+else
+  EXE_LINK = $(CC)
+endif
+
+ifeq ($(USE_SECTION_LOCKING),1)
+  EXE_LINK += -specs=/dev/null -Wl,-T./djgpp.lck
+endif
+
+ifeq ($(USE_32BIT_DRIVERS),1)
+all: $(CORE_OBJ) $(DRIVERS) $(TEST_PROG)
+else
+all:
+	@echo USE_32BIT_DRIVERS must be 1
+endif
+
+drvr_obj: $(DRVR_OBJ)
+
+#
+# objects for the loadable modules
+#
+wlm_obj/%.o: %.c
+	$(CC) -c $(CFLAGS) -DUSE_DXE3 -D_MODULE -o $@ $<
+	@echo
+
+wlm_obj/%.o: %.s
+	$(CC) -c $(CFLAGS) -x assembler-with-cpp -o $@ $<
+	@echo
+
+#
+# Test programs
+#
+EL_TEST_OBJ = el_test.o $(CORE_OBJ) 3c501.o 3c503.o 3c507.o 3c509.o \
+              3c515.o 3c59x.o 3c90x.o 3c990.o eth16i.o ne.o at1700.o \
+              atp.o ac3200.o accton.o 8390.o cs89x0.o eexpress.o \
+              fmv18x.o smc9194.o de600.o de620.o rtl8139.o ne2k-pci.o \
+            # acenic.o
+
+el_test.exe: djgpp.lck $(EL_TEST_OBJ)
+	$(EXE_LINK) -o $@ $(EL_TEST_OBJ) $(EXC_LIB)
+
+
+PPROBE_OBJ = pprobe.o pci.o bios32.o quirks.o kmalloc.o printk.o \
+             lock.o timer.o irq.o intwrap.o
+
+pprobe.exe: djgpp.lck $(PPROBE_OBJ)
+	$(EXE_LINK) -o $@ $(PPROBE_OBJ) $(EXC_LIB)
+
+
+TIMTEST_OBJ = timtest.o printk.o kmalloc.o irq.o lock.o intwrap.o
+
+timtest.o: timer.c
+	$(CC) -c $(CFLAGS) -DTEST -o $@ $^
+
+timtest.exe: djgpp.lck $(TIMTEST_OBJ)
+	$(EXE_LINK) -o $@ $(TIMTEST_OBJ)
+
+dxe_run.exe: dxe_run.o
+	$(EXE_LINK) -o $@ $^
+
+#
+# Building WLMs (Watt-32 Loadable Modules)
+#
+DXE_MOD_OBJS = $(addprefix wlm_obj/, dxe_mod.o printk.o kmalloc.o lock.o \
+                 irq.o dma.o timer.o kmalloc.o intwrap.o)
+
+3C501_OBJS = $(addprefix wlm_obj/, 3c501.o printk.o kmalloc.o lock.o \
+               irq.o dma.o timer.o kmalloc.o intwrap.o)
+
+3C503_OBJS = $(addprefix wlm_obj/, 3c503.o 8390.o printk.o kmalloc.o \
+               lock.o irq.o dma.o timer.o kmalloc.o intwrap.o)
+
+3C505_OBJS = $(addprefix wlm_obj/, 3c505.o printk.o kmalloc.o \
+               lock.o irq.o dma.o timer.o kmalloc.o intwrap.o)
+
+3C507_OBJS = $(addprefix wlm_obj/, 3c507.o printk.o kmalloc.o \
+               lock.o irq.o dma.o timer.o kmalloc.o intwrap.o)
+
+3C509_OBJS = $(addprefix wlm_obj/, 3c509.o printk.o kmalloc.o lock.o \
+               irq.o dma.o timer.o kmalloc.o intwrap.o)
+
+dxe_mod.wlm: $(DXE_MOD_OBJS)
+	$(WLM_LINK) -o $@ $^ $(WLM_ARGS)
+
+3c501.wlm: $(3C501_OBJS)
+	$(WLM_LINK) -o $@ $^ $(WLM_ARGS)
+
+3c503.wlm: $(3C503_OBJS)
+	$(WLM_LINK) -o $@ $^ $(WLM_ARGS)
+
+3c505.wlm: $(3C505_OBJS)
+	$(WLM_LINK) -o $@ $^ $(WLM_ARGS)
+
+3c507.wlm: $(3C507_OBJS)
+	$(WLM_LINK) -o $@ $^ $(WLM_ARGS)
+
+3c509.wlm: $(3C509_OBJS)
+	$(WLM_LINK) -o $@ $^ $(WLM_ARGS)
+
+airo.wlm: wlm_obj/airo.o
+	$(WLM_LINK) -o $@ $^ $(WLM_ARGS)
+
+clean:
+	rm -f $(OBJECTS) $(DRIVERS:.wlm=.map) el_test.map pprobe.o \
+              pprobe.map timtest.map Makefile.bak djgpp.lck wlm_obj/*.o
+
+vclean: clean
+	rm -f $(DRIVERS) $(TEST_PROG)
+
+
+#
+# Linker script for producing an EXE with locked text/data sections.
+# This should probably be changed for gcc 2.8.2 or older
+#
+ifeq ($(USE_SECTION_LOCKING),1)
+djgpp.lck: $(MAKEFILE)
+	$(shell echo.exe '\
+                OUTPUT_FORMAT("coff-go32")          \n\
+                ENTRY(start)                        \n\
+                SECTIONS                            \n\
+                {                                   \n\
+                  .text 0x1000+SIZEOF_HEADERS : {   \n\
+                    *(.text)                        \n\
+                    *(.gnu.linkonce.t*)             \n\
+                    *(.gnu.linkonce.r*)             \n\
+                    etext  = . ; _etext = . ;       \n\
+                    sltext = . ;                    \n\
+                    *(.ltxt)                        \n\
+                    eltext = . ;                    \n\
+                    . = ALIGN(0x200);               \n\
+                  }' > $@)
+	$(shell echo.exe '\
+                  .data ALIGN(0x200) : {            \n\
+                    djgpp_first_ctor = . ;          \n\
+                    *(.ctor)                        \n\
+                    djgpp_last_ctor  = . ;          \n\
+                    djgpp_first_dtor = . ;          \n\
+                    *(.dtor)                        \n\
+                    djgpp_last_dtor = . ;           \n\
+                    *(.data)                        \n\
+                    *(.gnu.linkonce.d*)             \n\
+                    *(.gcc_exc*)                    \n\
+                    ___EH_FRAME_BEGIN__ = . ;       \n\
+                    *(.eh_fram*)                    \n\
+                    ___EH_FRAME_END__ = . ;         \n\
+                    LONG(0)                         \n\
+                    edata  = . ; _edata = .;        \n\
+                    sldata = . ;                    \n\
+                    *(.ldat)                        \n\
+                    eldata = . ;                    \n\
+                    . = ALIGN(0x200);               \n\
+                  }' >> $@)
+	$(shell echo.exe '\
+                  .bss SIZEOF(.data) + ADDR(.data): \n\
+                  {                                 \n\
+                    _object.2 = . ;                 \n\
+                    . += 24 ;                       \n\
+                    *(.bss)                         \n\
+                    *(COMMON)                       \n\
+                    end = . ; _end = . ;            \n\
+                    . = ALIGN(0x200);               \n\
+                  }                                 \n\
+                }' >> $@)
+else
+djgpp.lck: $(MAKEFILE)
+	@echo '# dummy specs' > $@
+endif
+
+#
+# Generated dependencies; Due to some hacks in gcc 2.95 and djgpp 2.03
+# we must prevent "$(DJDIR)/bin/../include/sys/version.h" from beeing
+# included in dependency output (or else this makefile cannot be used on
+# another machine). We therefore use a special 'specs' file during
+# pre-processing.
+#
+MM_SPECS = specs.tmp
+
+depend: $(PREREQUISITES)
+	@echo Generating dependencies..
+	@cp $(MAKEFILE) Makefile.bak
+	@echo "*cpp: %(cpp_cpu) %{posix:-D_POSIX_SOURCE} -remap" > $(MM_SPECS)
+	sed -e "/^# DO NOT DELETE THIS LINE/,$$d" < Makefile.bak > $(MAKEFILE)
+	echo "# DO NOT DELETE THIS LINE"                        >> $(MAKEFILE)
+	$(CC) -MM -specs=$(MM_SPECS) $(CFLAGS) $(SOURCES)       >> $(MAKEFILE)
+	rm -f $(MM_SPECS)
+
+
+# DO NOT DELETE THIS LINE
+printk.o: printk.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h module.h
+lock.o: lock.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h
+irq.o: irq.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h module.h
+dma.o: dma.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h module.h
+pci.o: pci.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h module.h bios32.h pci.h
+pci-scan.o: pci-scan.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h bios32.h pci.h pci-scan.h
+bios32.o: bios32.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h module.h bios32.h pci.h
+quirks.o: quirks.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h module.h bios32.h pci.h
+timer.o: timer.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h module.h
+kmalloc.o: kmalloc.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h module.h
+net_init.o: net_init.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h module.h
+eth16i.o: eth16i.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h
+eepro.o: eepro.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h
+apricot.o: apricot.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h
+at1700.o: at1700.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h
+cs89x0.o: cs89x0.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h cs89x0.h
+e2100.o: e2100.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h 8390.h
+3c501.o: 3c501.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h 3c501.h
+3c503.o: 3c503.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h 8390.h 3c503.h
+3c505.o: 3c505.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h 3c505.h
+3c507.o: 3c507.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h
+3c509.o: 3c509.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h module.h
+3c515.o: 3c515.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h
+3c59x.o: 3c59x.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h module.h bios32.h pci.h 3c59x.h
+3c575_cb.o: 3c575_cb.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h bios32.h pci.h module.h 3c575_cb.h
+3c90x.o: 3c90x.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h module.h bios32.h pci.h 3c90x.h
+3c990.o: 3c990.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h module.h bios32.h pci.h
+8390.o: 8390.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h 8390.h 3c503.h
+de600.o: de600.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h
+de620.o: de620.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h de620.h
+ne.o: ne.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h pci.h bios32.h 8390.h ne.h
+wd.o: wd.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h 8390.h wd.h
+accton.o: accton.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h ethpknic.h accton.h
+rtl8139.o: rtl8139.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h bios32.h pci.h module.h
+ne2k-pci.o: ne2k-pci.c pmdrvr.h iface.h lock.h ioport.h ../../pcap-dos.h \
+  ../../msdos/pm_drvr/lock.h ../../pcap-int.h kmalloc.h bitops.h timer.h \
+  dma.h irq.h printk.h bios32.h pci.h module.h 8390.h pci-scan.h
+airo.o: airo.c

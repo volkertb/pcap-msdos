@@ -1,0 +1,592 @@
+
+                        delorie.com call for proxies
+                                      
+                                Click Here 
+                                      
+     www.delorie.com/djgpp/doc/ug/interrupts/hwirqs.html   search   
+   
+           Guide: Intercepting And Processing Hardware Interrupts
+                                      
+   Written by Peter Marinov.
+   
+PART I
+
+   Begginer's guide. This is to describe what are hardware interrupts and
+   how are they processed by an IBM PC compatible. If you have already
+   worked with handling hardware interrupts skip this part.
+   
+  1. First acquaintance with hardware interrupts.
+  
+   Contemporary computer is maintaining lots and various of devices --
+   hard disk, video card, keyboard, mouse, printer etc. Most of the time
+   these devices work autonomously and require none of special CPU
+   attention.
+   
+   For example the keyboard needs to inform the CPU only when a key is
+   pressed or released, most of the time CPU knows nothing what happens
+   with this device. When a key is pressed the keyboard REQUESTS special
+   attention by the CPU, when the current instruction is completed it
+   temporarily discontinues executing the main program and starts a
+   special chunk of code to proceed keyboard's request. This piece of
+   code gets the key pressed and informs the keyboard device that the
+   information is processed, which enables the keyboard to perform a new
+   request when a new key is available. When the request is resolved the
+   main program continues to be executed exactly at the point where it
+   was left.
+   
+   Such a request has its special name Interrupt Request or IRQ. The CPU
+   maintains a special table with addresses for 15 interrupt requests.
+   The chunk of code resolving an interrupt request is usually called
+   driver. Such a driver in most of the cases is provided by the
+   operating system, the device manufacturers or rarely by the BIOS.
+   
+  2. Hardware interrupt controller - 8259.
+  
+   As more than one device can request interrupt at one and the same time
+   there is a special controller provided in every IBM PC compatible --
+   Intel 8259 Interrupt Controller (actually there are two of them). 8259
+   serves two purposes in general: to accumulate requests and to convey
+   them one by one to the CPU. Acquiring complete documentation of this
+   controller will easily distract you from IRQ processing material. But
+   following the 8259 processes with examples makes it simple to
+   understand the very nature of IRQs. Let us have two requests at one
+   and the same time,the first will be PC timer and the second will be
+   the keyboard. Both devices make a request to 8259 so that the CPU
+   should serve particular events. 8259 accepts the requests. First is
+   the timer that interrupts the CPU having higher priority than the
+   keyboard. When the timer driver serves the request it issues an
+   end-of-interrupt command to 8259, which directs the controller to
+   initiate keyboard interrupt toward the CPU. The keyboard interrupt
+   driver complies to the same end-of-interrupt command, which then makes
+   8259 available to further accumulate interrupt requests. Below is how
+   will timer and keyboard drivers look in peace of code.
+
+void TimerDriver(void)
+{
+  ++TimerCount;
+  outpotb(0x20, inportb(0x20));   /* End-Of-Interrupt command */
+}
+
+void KbdDriver(void)
+{
+  unsigned char control_kbd;
+
+  LastKey = inportb(0x60);
+
+  /* Tell the keyboard that the key is processed */
+  control_kbd = inportb(0x61);
+  outportb(0x61, control_kbd | 0x80);  /* set the "enable kbd" bit */
+  outportb(0x61, control_kbd);  /* write back the original control value */
+  outpottb(0x20, inportb(0x20));  /* End-Of-Interrupt command */
+}
+
+   It is not necessary to actually know how End-Of-Interrupt command
+   works, you only need to know that such a command is necessary for the
+   successful accomplishment of a hardware interrupt.
+   
+   CPU can be directed not to serve hardware interrupts by disable() and
+   enabled back by enable(). 8259 can be directed not to convey specific
+   device interrupt requests to the CPU. There is an example below that
+   enables and disables timer interrupts from being processed.
+void DisableTimer(void)
+{
+  outportb(0x21, inportb(0x21) | 1);
+}
+
+void EnableTimer(void)
+{
+  outportb(0x21, inportb(0x21) & ~1);
+}
+
+   For each of the devices connected to 8259 controller there is a bit
+   which when set to 1 disables and when set to 0 enables this particular
+   device. By software point of view this is all that should be known for
+   8259 interrupt controller. Below is a table which shows interrupt
+   priorities. The devices 0-7 are connected to the primary and 8-15
+   connected to secondary interrupt controller. Secondary interrupt
+   controller can be accessed via ports 0xa0 and 0xa1.
+ 0 System timer
+ 1 Keyboard
+ 2 Cascaded second interrupt controller
+ 3 COM2 - serial interface
+ 4 COM1 - serial interface
+ 5 LPT - parallel interface
+ 6 Floppy disk controller
+ 7 Available
+ 8 CMOS real-time clock
+ 9 Sound card
+10 Network adapter
+11 Available
+12 Available
+13 Numeric processor
+14 IDE -- Hard disk interface
+15 IDE -- Hard disk interface
+
+   The map of interrupt controllers may vary depending on the installed
+   devices and their configuration.
+   
+PART II
+
+   Advanced guide in handling hardware interrupts under 32-bit DPMI
+   server.
+   
+  3. IRQ handling in real and 32-bit protected-mode (under DPMI).
+  
+   While compiled with DJGPP your program runs in 32-bit protected-mode.
+   But as DOS is a real-mode operating system there are special kind of
+   executives to provide an environment for 32-bit programs -- DPMI
+   servers (DPMI stands for DOS Protected Mode Interface). While
+   providing smooth execution of 32-bit code, the DPMI host is switching
+   to real-mode to execute DOS API code, and switching back to
+   protected-mode to continue executing your code.
+   
+   There is a certain difference in handling IRQs while in real and
+   protected mode. 80x86 family of CPUs maintain an interrupt vectors
+   table starting at 0x0:0x0. DOS API provides two functions to attach
+   and detach interrupt handlers for a specific vector in this table. By
+   indicating to the CPU that an IRQ is to be served the 8259 controller
+   issues an interrupt vector. Using this information the CPU fetches the
+   address of a driver routine. The consecutive execution of the current
+   program flow is temporarily discontinued. The CPU stores the current
+   address and flag status onto the stack and then starts to execute the
+   driver code. When the driver accomplishes the CPU continues the
+   current program execution by extracting back the current address and
+   flags from the stack. The 8259 vectors are mapped in the CPU interrupt
+   vector table starting by default at #8.
+   
+   While running in 32-bit mode the CPU maintains an Interrupt Descriptor
+   Table (IDT) which differs from interrupt vectors table in real mode.
+   The DPMI host directs the CPU to start using IDT instead of interrupt
+   vectors table. The list of drivers is kept in virtual interrupt vector
+   table. When an interrupt occurs, the host checks this virtual
+   interrupt vector table and, if the IRQ is to be served by protected
+   mode driver, the CPU starts to execute 32-bit code. DPMI host
+   guarantees that, even when an IRQ occurs while CPU executes real-mode
+   code, the correct 32-bit driver will be executed. If your program runs
+   in a kind of v86 mode environment (EMM386 or QEMM in config.sys, or
+   under Windows DOS prompt) an IRQ will be served much more faster if
+   the driver is 32-bit code.
+   
+   DPMI host provides virtual memory as portions of code or data memory
+   can be paged out on disk when not in use, and brought back when this
+   particular code or data is requested by the program flow of execution.
+   As DOS is not reentrant in its API functions the disk operations are
+   not reentrant too. Which, said in other words, means never to rely on
+   calling disk read/write operation while the prvious one is not
+   accomplished. This prevents 32-bit driver code to be randomly read in
+   or paged out to disk swap file. The DPMI host provides a set of
+   functions to claim that a portion of code or data should be excluded
+   from paging process, which means that the memory regions are locked.
+   All function and data portions accesed by the driver code should be
+   locked before claiming certain IRQ.
+   
+   Invoking your driver code to handle an IRQ the DPMI host provides only
+   a bare minimum of stack space. It is your responsibility to switch to
+   vaster space for stack use. Your driver should save upon entering and
+   restore upon exiting all the registers and CPU flags. All segment
+   registers should be loaded with their proper selectors in order to
+   access driver data (and stack).
+   
+  4. Writing a wrapper for a hardware interrupts handler.
+  
+   As there is a list of tasks that each interrupt handling routine
+   should perform receiving a request, a special wrapper module will be
+   presented below. Understanding this module needs special knoledge in
+   80386 assembler and AT&T style assembler. However, being not in
+   possesion of such advanced skills, you may consider this module a
+   black box as its functionality will be described in the best possible
+   details.
+   
+   Wrapper functionality is described in exactly 9 steps.
+    1. save all 80386 registers that may be destroyed by the IRQ handler
+    2. let all segment registers to point handler's data segment by
+       loading the proper selector
+    3. enough stack area should be in disposition to the stack pointer
+       register
+    4. invoke user IRQ handler
+    5. restore original stack settings
+    6. restore all 80386 registers
+    7. if necessary call original IRQ handler (this one being default
+       upon program start)
+    8. disable interrupts as expected by the DPMI server
+    9. exit with "return from interrupt" instruction
+       
+   All of the steps revealed in details:
+    1. save all 80386 registers. This is done by simply pushing all the
+       resigters in the stack. On exit they will be poped back.
+    2. load segment registers. In DJGPP all segments by default point to
+       the same segment (flat memory). Thus all of them may be loaded by
+       a single selector value. DJGPP provides a cs relative variable
+       that is always an IRQ secured selector -- __djgpp_ds_alias.
+    3. let the stack pointer sp point to an area of enough stack space.
+       The wrapper should be provided with a table of readily allocated
+       stacks -- _IRQStacks. The wrapper searches for an available stack.
+       If successfull, marks the stack as used; this will prevent other
+       IRQs from allocating the same stack. If the stack search is not
+       successfull, the wrapper exits IRQ unserved. This may lead to
+       computer lock-up, that is why enough stacks should be ensured in
+       _IRQStacks.
+    4. call the proper IRQ handler. IRQ handler call-back functions
+       should be set in _IRQHandlers array. As the wrapper knows its IRQ
+       number, the proper handler is invoked.
+    5. restore the original stack frame; the old stack frame was stored
+       in the new stack. Pop the old frame and load ss:sp with this
+       value.
+    6. restore all 80386 CPU registers. Pop the registers from stack.
+    7. the handler is a call-back function in format int
+       IRQHandler(void). If the handler returns 1, the default IRQ
+       handler is to be called. Before attaching particular wrapper to
+       interrupt vector, the old value should be stored in _OldIRQVectors
+       table. The wrapper jumps to a particular old vector instead of
+       proceeding with step 9; the original old handler will finish the
+       interrupt request with a "return-from-interrupt" intstruction.
+       Before jumping the CPU registers are restored from the stack.
+    8. disable the interrupts before returning to DPMI. DPMI expects the
+       interrupts disabled upon returning.
+    9. Finish by a "return-from-interrupt" instruction.
+       
+   Below is the actual code of a wrapper module.
+/* wrap_g.S */
+
+/*
+IRQ wrappers for DJGPP.
+*/
+
+.data
+_IRQWrappers:
+        .long   _IRQWrap0,  _IRQWrap1,  _IRQWrap2,  _IRQWrap3
+        .long   _IRQWrap4,  _IRQWrap5,  _IRQWrap6,  _IRQWrap7
+        .long   _IRQWrap8,  _IRQWrap9,  _IRQWrap10, _IRQWrap11
+        .long   _IRQWrap12, _IRQWrap13, _IRQWrap14, _IRQWrap15
+
+_IRQHandlers:
+        .long   0, 0, 0, 0      /* 0 - 3 */
+        .long   0, 0, 0, 0      /* 4 - 7 */
+        .long   0, 0, 0, 0      /* 8 - 11 */
+        .long   0, 0, 0, 0      /* 12 - 15 */
+
+        .globl  _IRQWrappers
+        .globl  _IRQHandlers
+        .globl  _IRQWrap
+        .globl  _IRQWrap_End
+
+/*
+How many stacks to allocate for the irq wrappers. You could
+probably get away with fewer of these, if you want to save memory and
+you are feeling brave...
+Extracted from irqwrap.h: BOTH SHOULD BE THE SAME!
+*/
+#define IRQ_STACKS      8
+
+.text
+#define IRQWRAP(x)                                              ; \
+_IRQWrap##x:                                                    ; \
+        pushw   %ds                     /* save registers */    ; \
+        pushw   %es                                             ; \
+        pushw   %fs                                             ; \
+        pushw   %gs                                             ; \
+        pushal                                                  ; \
+        /* __djgpp_ds_alias is irq sequred selector (see exceptn.h) */ ; \
+        movw    %cs:___djgpp_ds_alias, %ax                      ; \
+        movw    %ax, %ds                /* set up selectors */  ; \
+        movw    %ax, %es                                        ; \
+        movw    %ax, %fs                                        ; \
+        movw    %ax, %gs                                        ; \
+                                                                ; \
+        movl    $(IRQ_STACKS - 1), %ecx /* look for a free stack */ ; \
+        /* Search from the last toward the first */             ; \
+StackSearchLoop##x:                                             ; \
+        leal    _IRQStacks(, %ecx, 4), %ebx                     ; \
+        cmpl    $0, (%ebx)                                      ; \
+        jnz     FoundStack##x           /* found one! */        ; \
+                                                                ; \
+        decl    %ecx                    /* backward */          ; \
+        jnz     StackSearchLoop##x                              ; \
+                                                                ; \
+        jmp     GetOut##x               /* No free stack! */    ; \
+                                                                ; \
+FoundStack##x:                                                  ; \
+        movl    %esp, %ecx              /* save old stack in ecx:dx */  ; \
+        movw    %ss, %dx                                        ; \
+                                                                ; \
+        movl    (%ebx), %esp            /* set up our stack */  ; \
+        movw    %ax, %ss                                        ; \
+                                                                ; \
+        movl    $0, (%ebx)              /* flag the stack is in use */  ; \
+                                                                ; \
+        pushl   %edx                    /* push old stack onto new */   ; \
+        pushl   %ecx                                            ; \
+        pushl   %ebx                                            ; \
+                                                                ; \
+        cld                             /* clear the direction flag */  ; \
+                                                                ; \
+        movl    _IRQHandlers + 4 * x, %eax                      ; \
+        call    *%eax                   /* call the C handler */ ; \
+                                                                ; \
+        popl    %ebx                    /* restore the old stack */ ; \
+        popl    %ecx                                            ; \
+        popl    %edx                                            ; \
+        movl    %esp, (%ebx)                                    ; \
+        movw    %dx, %ss                                        ; \
+        movl    %ecx, %esp                                      ; \
+                                                                ; \
+        orl     %eax, %eax              /* check return value */; \
+        jz      GetOut##x                                       ; \
+                                                                ; \
+        popal                           /* chain to old handler */; \
+        popw    %gs                                             ; \
+        popw    %fs                                             ; \
+        popw    %es                                             ; \
+        popw    %ds                                             ; \
+                                        /* 8 = sizeof(__dpmi_paddr) */; \
+        ljmp    %cs:_OldIRQVectors + 8 * x                      ; \
+                                                                ; \
+GetOut##x:                                                      ; \
+        popal                           /* iret */              ; \
+        popw    %gs                                             ; \
+        popw    %fs                                             ; \
+        popw    %es                                             ; \
+        popw    %ds                                             ; \
+        sti                                                     ; \
+        iret
+
+_IRQWrap:
+        .byte   0
+
+IRQWRAP(0);
+IRQWRAP(1);
+IRQWRAP(2);
+IRQWRAP(3);
+IRQWRAP(4);
+IRQWRAP(5);
+IRQWRAP(6);
+IRQWRAP(7);
+IRQWRAP(8);
+IRQWRAP(9);
+IRQWRAP(10);
+IRQWRAP(11);
+IRQWRAP(12);
+IRQWRAP(13);
+IRQWRAP(14);
+IRQWRAP(15);
+
+_IRQWrap_End:
+        .byte   0
+
+   The file is "wrap_g.S". 'S' is capital to direct gcc to provide
+   preprocessor support for the file. The wrapper is defined as a macros
+   and then multiplicated to generate code for all the 16 IRQ wrappers.
+   All the wrappers' addresses fill an array (_IRQWrappers) so that a
+   particular wrapper could be simply picked up by its index in this
+   array.
+   
+  5. Code and data locking.
+  
+   To prevent the code and data accessed by an IRQ handler from bein
+   paged out, the memory should be locked. The DPMI server provides a
+   __dpmi_lock_linear_region() function for locking memory regions. Below
+   is the code of LockData() and LockCode() functions.
+int LockData(void *a, long size)
+{
+  unsigned long baseaddr;
+  __dpmi_meminfo region;
+
+  if (__dpmi_get_segment_base_address(_my_ds(), &baseaddr) == -1)
+    return (-1);
+
+  region.handle = 0;
+  region.size = size;
+  region.address = baseaddr + (unsigned long)a;
+
+  if (__dpmi_lock_linear_region(&region) == -1)
+    return (-1);
+
+  return (0);
+}
+
+int LockCode(void *a, long size)
+{
+  unsigned long baseaddr;
+  __dpmi_meminfo region;
+
+  if (__dpmi_get_segment_base_address(_my_cs(), &baseaddr) == -1)
+    return (-1);
+
+  region.handle = 0;
+  region.size = size;
+  region.address = baseaddr + (unsigned long)a;
+
+  if (__dpmi_lock_linear_region(&region) == -1)
+    return (-1);
+
+  return (0);
+}
+
+   _my_cs() and _my_ds() returns code and data segment selectors
+   respectively. Region description structure is filled with start and
+   end addresses, and then __dpmi_lock_linear_region() is invoked.
+   
+   Locking a variable or array looks like this: LockData(&var,
+   sizeof(var)); but how to lock a function when the code size is
+   unknown? When compiled, two adjacent functions occupy two adjacent
+   memory regions. Now calculating function code size is a simple address
+   arithmetic. Below is an example of how to lock an IRQ handler
+   function.
+void TimerDriver(void)
+{
+  ++TimerCount;
+  outpotb(0x20, inportb(0x20));  /* End-Of-Interrupt command */
+}
+
+void EndOfTimerDriver(void)
+{
+}
+
+...
+
+LockCode(TimerDriver, (long)EndOfTimerDriver - (long)TimerDriver);
+
+   It is useful to use macroses to facilitate data and code locking.
+#define END_OF_FUNCTION(x)    static void x##_End() { }
+
+#define LOCK_VARIABLE(x)  LockData((void *)&x, sizeof(x))
+#define LOCK_FUNCTION(x)  LockCode(x, (long)x##_End - (long)x)
+
+   Below is the same example of function and data locking but using these
+   macros.
+long TimerCount;
+
+void TimerDriver(void)
+{
+  ++TimerCount;
+  outpotb(0x20, inportb(0x20));  /* End-Of-Interrupt command */
+}
+END_OF_FUNCTION(TimerDriver);
+
+...
+
+LOCK_FUNCTION(TimerDriver);
+LOCK_VARIABLE(TimerCount);
+
+  6. Intercepting IRQs, allocating stacks (additional service functions).
+  
+   Intercepting IRQs involves a pair of DPMI functions --
+   __dpmi_get_protected_mode_interrupt_vector() and
+   __dpmi_set_protected_mode_interrupt_vector(). The original vector
+   value is stored in OldIRQVectors[] to be used by the wrapper to invoke
+   the old handler, and to be restored when UninstallIRQ() is called. The
+   wrapper will invoke the proper user code based on what is loaded in
+   IRQHandlers[]. The proper IRQ wrapper is picked from IRQWrappers[],
+   which is initialized in wrap_g.S. Only once a setup function InitIRQ()
+   is called to prepare the library for proper use. UninstallIRQ() keeps
+   count of how much IRQ vectors are hooked, and when the last one is
+   released, a ShutDownIRQ() cleaning function is invoked to release
+   stack space from the heap. Notice that interrupt vectors for the
+   second (cascaded) IRQ controller are mapped starting at position 0x70.
+   Depending on the IRQ number the proper vector is intercepted.
+int InstallIRQ(int nIRQ, int (*IRQHandler)(void))
+{
+  int nIRQVect;
+  __dpmi_paddr IRQWrapAddr;
+
+  if (!bInitIRQ)
+    if (!InitIRQ())
+      return 0;
+
+  if (nIRQ > 7)
+    nIRQVect = 0x70 + (nIRQ - 8);
+  else
+    nIRQVect = 0x8 + nIRQ;
+
+  IRQWrapAddr.selector = _my_cs();
+  IRQWrapAddr.offset32 = (int)IRQWrappers[nIRQ];
+  __dpmi_get_protected_mode_interrupt_vector(nIRQVect,
+&OldIRQVectors[nIRQ]);
+  IRQHandlers[nIRQ] = IRQHandler;  /* IRQWrapper will call IRQHandler */
+
+  __dpmi_set_protected_mode_interrupt_vector(nIRQVect, &IRQWrapAddr);
+  return 1;
+}
+
+void UninstallIRQ(int nIRQ)
+{
+  int nIRQVect;
+  int i;
+
+  if (nIRQ > 7)
+    nIRQVect = 0x70 + (nIRQ - 8);
+  else
+    nIRQVect = 0x8 + nIRQ;
+
+  __dpmi_set_protected_mode_interrupt_vector(nIRQVect,
+&OldIRQVectors[nIRQ]);
+  IRQHandlers[nIRQ] = NULL;
+
+  /*
+  Check whether all the IRQs are uninstalled and call ShutDownIRQ().
+  */
+  for (i = 0; i < 16; ++i)
+    if (IRQHandlers[i] != NULL)
+      return;  /* Still remains a handler */
+  ShutDownIRQ();
+}
+
+   InitIRQ() and ShutDownIRQ() are a pair of functions, called when
+   InstallIRQ() is first called and when UninstallIRQ unhooks the last
+   vector that was intercepted. Init function locks all the data and code
+   memory accessed from an IRQ call, allocates space for stacks, and
+   rises a flag indicating that the module is properly setup. Shut down
+   function disposes the stack space.
+static int InitIRQ(void)
+{
+  int i;
+
+  /*
+  Lock IRQWrapers[], IRQHandlers[] and IRWrap0()-IRQWrap15().
+  */
+  if (LOCK_VARIABLE(IRQWrappers) == -1)
+    return 0;
+  if (LOCK_VARIABLE(IRQHandlers) == -1)
+    return 0;
+  if (LOCK_VARIABLE(OldIRQVectors) == -1)
+    return 0;
+  if (LOCK_FUNCTION(IRQWrap) == -1)
+    return 0;
+
+  for (i = 0; i < IRQ_STACKS; ++i)
+  {
+    if ((IRQStacks[i] = malloc(STACK_SIZE)) == NULL)
+    ...
+    LockData(IRQStacks[i], STACK_SIZE) == -1
+    ...
+    (char *)IRQStacks[i] += (STACK_SIZE - 16);  /* Stack is incremented downwar
+d */
+  }
+  bInitIRQ = 1;
+  return 1;
+}
+
+static void ShutDownIRQ(void)
+{
+  int i;
+  char *p;
+
+  for (i = 0; i < IRQ_STACKS; ++i)
+  {
+    p = (char *)IRQStacks[i] - (STACK_SIZE - 16);
+    free(p);
+  }
+  bInitIRQ = 0;
+}
+
+  7. Acknowledgements (you may consider this "for further reading" as well).
+  
+   Allegro, Game programming library originated by Shawn Hargreaves
+   Alaric B. Williams, The Dark Art of writing DJGPP Hardware Interrupt
+   Handlers
+   
+     webmaster   donations   bookstore     delorie software   privacy   
+     Copyright ¸ 1998   by DJ Delorie     Updated Nov 1998   
+   
+      You can help support this site by visiting the advertisers that
+                    sponsor it! (only once each, though)

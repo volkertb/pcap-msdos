@@ -1,0 +1,190 @@
+
+                       3Com (R) Corporation
+            	    3CR990 Network Interface Card 
+                         Driver for Linux
+
+
+This file describes the 3CR990 network interface card (NIC) driver for Linux.  
+It includes the following topics:
+
+    * Supported NICs
+    * Getting the Sources
+    * Unzipping the Sources
+    * Building the Driver as a Module
+    * Installing the Driver as a Module
+    * Configuration options for the Driver Module
+    * Support Information
+    * Additional Information
+      
+    CAUTION:  3Com has not yet verified functionality of the 3c990 
+    driver on platforms, architectures, or configurations other than 
+    those specified in this file. Although it may operate correctly 
+    on other configurations, users are encouraged to exercise caution  
+    when using the driver with other configurations.
+                  
+    DISCLAIMER:  3Com makes no warranties or guarantees, expressly, 
+    implied, or otherwise.  Usage of this driver is solely at the 
+    risk of the user.
+                
+
+* Supported NICs
+----------------
+
+The 3C990 NIC driver for Linux supports the following EtherLink NICs:
+
+ * 3Com 10/100 PCI NIC w/3XP (3CR990-TX-95) 
+   This NIC has PCI device ID of 9902 (in hexadecimal)
+ * 3Com 10/100 PCI NIC w/3XP (3CR990-TX-97) 
+   This NIC has PCI device ID of 9903 (in hexadecimal)
+ * 3Com 10/100 PCI NIC w/3XP (3C990B-TX-M) 
+   This NIC has PCI device ID of 9904 (in hexadecimal)
+ * 3Com 10/100 PCI Server NIC w/3XP  (3CR990SVR95) 
+   This NIC has PCI device ID of 9908 (in hexadecimal)
+ * 3Com 10/100 PCI Server NIC w/3XP (3CR990SVR97) 
+   This NIC has PCI device ID of 9909 (in hexadecimal)
+ * 3Com 10/100 PCI Server NIC w/3XP (3C990BSVR) 
+   This NIC has PCI device ID of 990A (in hexadecimal)
+
+The 3c590/3c592/3c595/3c597 and 3C905 Families are supported
+with the 3c59x driver from Donald Becker.
+
+
+* Getting the Sources
+---------------------
+
+    Sources are in the file 3c990-1.0.0a.tar.gz. This file can be obtained
+    from http://www.3com.com/infodeli/tools/nic/linuxdownload.htm
+ 
+* Unzipping the Sources
+-----------------------
+
+    To unzip the 3c990-1.0.0a.tar.gz, run the command -
+
+    #tar zxvf 3c990-1.0.0a.tar.gz 
+ 
+* Building the Driver as a Module
+----------------------------------
+
+    To build the 3c990 driver as a loadable module, you can either: 
+    + make
+      to build the driver for the Uni-processor machine
+    + make up 
+      to build the driver for Uni-processor machine
+    + make smp
+      to build the driver for SMP (symmetric multi-processor) machine
+
+    + Compile the 3c990.c source file with the following command:
+
+	gcc -DMODULE -D__KERNEL__ -Wall -Wstrict-prototypes \
+        -I/usr/src/linux/include -O6 -c 3c990.c \
+        `[ -f /usr/include/linux/modversions.h ] && echo -DMODVERSIONS`
+
+    Additionally, you can modify this compile line by:
+    + Adding -D__SMP__ to the command line for SMP support
+    + Adding -I/usr/src/linux/include to the command line if you've
+      upgraded the kernel (assuming kernel source is in /usr/src/linux/include)        
+    
+* Installing Driver as a Module
+--------------------------------
+      
+    To load the 3C990 driver module on a RedHat 6.1  or 6.2 system, 
+    place an "alias" in the file named /etc/conf.modules.  
+    
+    The alias instructs the kernel module loader to use the 
+    3C990 driver module for a specific Linux Ethernet interface.  
+    When the system attempts to use this Ethernet interface, it 
+    causes the kernel module loader to load the 3c990 driver
+    into the system automatically, and initialize it for use.
+    
+    The alias listed below associates the Ethernet device "eth0" with
+    the 3c990 driver module.  If you have one of the EtherLink NICs
+    that is supported by the driver, place the following line in the
+    /etc/conf.modules file:
+
+	    alias eth0 3c990
+
+    To enable additional supported EtherLink NICs, create additional 
+    aliases, such as:
+
+    	    alias eth1 3c990
+	    alias eth2 3c990
+
+    To install a loadable module by hand, enter the following command:
+    
+    	#insmod 3c990.o
+
+    Note: If PATH does not include current directory and module is in
+          the current directory, use 
+ 
+	#insmod ./3c990.o 
+
+    
+* Configuration options for the Driver Module
+---------------------------------------------------------
+
+    The 3C990 driver supports the following options, which can be 
+    supplied as command line arguments to the insmod command or in the 
+    /etc/conf.modules file.  Unless otherwise stated, all settings take 
+    the form of:
+    	
+    force=value [,value ]
+	
+    value can be 
+        1) 0        [10 Megabit Half Duplex]
+        2) 1        [10 Megabit Full Duplex]
+        3) 2        [100 Megabit Half Duplex]
+        4) 3        [100 Megabit Full Duplex]
+        5) 4        [Default option: Auto]
+
+    NOTE:  If you use the conf.modules file to load the driver at
+    boot time, include the word "options" when configuring the driver.
+    For example:  options 3c990 force=0
+	
+    If you use command line insmod, do not include the word "option"
+    when configuring the driver.  For example:  #insmod ./3c990.o force=0
+    will force the 10 Megabit half duplex settings. 
+    If you have multiple adapters, settings can be done by specifying the 
+    value of force for each adapter. For example -
+    a) #insmod ./3c990.o force=0,2 
+       This will force the settings for first NIC to 10 Megabit Half Duplex 
+       and the second NIC to 100 Megabit Full duplex.
+    b) #insmod ./3c990.o force=0,,3
+       This will force the settings for first NIC to 10 Megabit Half Duplex,
+       second NIC to autonegotiation and third NIC to 100Megabit Half Duplex.
+
+
+
+* Support Information
+---------------------
+
+    E-mail Support:
+
+    - USA or Canada: linux_support@3com.com
+    - Mexico and Latin America: AMI_HD@3com.com
+    - Brazil: br-nicsupport@3com.com 
+    - Europe, Middle East and Africa: European_Technical_Support@3com.com
+    - Asia Pacific Rim: apr_technical_support@3com.com
+    - Source/binary name/location
+      (http://support.3com.com/infodeli/tools/nic/linux.htm )
+
+
+    Knowledgebase Support:
+    - http://knowledgebase.3com.com
+
+    Enhancement Requests:
+    - To request or submit driver modifications for 3Com consideration, go
+    to http://support.3com.com/infodeli/tools/nic/linuxrequest.htm to obtain
+    the form.
+
+
+* Additional Information
+------------------------
+
+    - Linux network driver site:
+	  http://cesdis.gsfc.nasa.gov/linux/drivers
+
+    - Detailed instructions for building a driver:
+	  http://cesdis.gsfc.nasa.gov/linux/misc/modules.html
+	
+    /usr/src/linux/Documentation
+	  

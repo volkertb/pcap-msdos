@@ -1,0 +1,377 @@
+File: README
+                             
+                             3Com (R) Corporation
+             EtherLink 10/100 PCI (3C90x) Network Interface Card 
+                              Driver for Linux
+
+
+This file describes the 3C90x network interface card (NIC) driver for Linux.  
+It includes the following topics:
+
+    * Supported NICs
+    * Supported Platforms and Distributions
+    * Loading the Driver Module
+    * Building the Driver
+    * Configuring the Driver 
+    * Support Information
+    * Additional Information
+      
+    CAUTION:  3Com has not yet verified functionality of the 3C90x 
+    driver on platforms, architectures, or configurations other than 
+    those specified in this file. Although it may operate correctly 
+    on other configurations, users are encouraged to exercise caution  
+    when using the driver with other configurations.
+                  
+    DISCLAIMER:  3Com makes no warranties or guarantees, expressly, 
+    implied, or otherwise.  Usage of this driver is solely at the 
+    risk of the user.
+                
+
+* Supported NICs
+----------------
+
+The 3C90x NIC driver for Linux supports the following EtherLink NICs:
+
+    EtherLink 10/100 PCI NICs
+    3C905C Family and 3C920 ASICs EtherLink 10/100 PCI including
+    the -TX and -TX-M
+    3C905B Family and 3C918 ASICs EtherLink 10/100 PCI including
+    the -TX -TX-M and -TX-NM
+    3C905B-COMBO  EtherLink 10/100 PCI COMBO
+
+    EtherLink Server 10/100 PCI NICs
+    3C980C-TX    EtherLink Server 10/100 PCI
+    3C980B-TX    EtherLink Server 10/100 PCI
+    3C980-TX     EtherLink Server 10/100 PCI
+	
+    EtherLink 100 PCI NIC
+    3C905B-FX     EtherLink 100 PCI Fiber
+
+    EtherLink 10 PCI NICs
+    3C900B-TPO    EtherLink 10 PCI TPO
+    3C900B-TPC    EtherLink 10 PCI TPC
+    3C900B-COMBO  EtherLink 10 PCI COMBO
+    3C900B-FL     EtherLink 10 PCI Fiber
+
+    The 3c590/3c592/3c595/3c597 and 3C905 Families are supported
+    with the 3c59x driver from Donald Becker.
+
+* Supported Platforms and Distributions
+---------------------------------------
+
+    The 3C90x driver for Linux has been tested with the following
+    commercial Linux distributions, using the i386 architecture:
+
+    RedHat 6.1 
+      Kernel version 2.2.12-20	(i386)
+
+    Caldera 2.3
+      Kernel version 2.2.10	(i386)*	
+
+    TurboLinux 4.0.5
+      Kernel version 2.2.12	(i386)
+
+    SuSe 6.2                  	
+      Kernel version 2.2.10	(i386)
+   
+    Note:
+      The driver has been tested on both SMP and UP machines.
+      Although not tested, this driver is likely to work on other Linux
+      distributions that use kernel versions 2.0.36 - 2.2.x.
+
+      *When compiling the driver under Caldera 2.3 distribution, users
+      may need to include the SMP parameter even when compiling on UP machines.
+
+
+
+* Loading the Driver Module
+---------------------------
+
+    To load the 3C90x driver module on a RedHat 5.2, 6.0  or 6.1 system, 
+    place an "alias" in the file named /etc/conf.modules.  
+    
+    The alias instructs the kernel module loader to use the 
+    3C90x driver module for a specific Linux Ethernet interface.  
+    When the system attempts to use this Ethernet interface, it 
+    causes the kernel module loader to load the 3c90x driver
+    into the system automatically, and initialize it for use.
+    
+    The alias listed below associates the Ethernet device "eth0" with
+    the 3c90x driver module.  If you have one of the EtherLink NICs
+    that is supported by the driver, place the following line in the
+    /etc/conf.modules file:
+
+	    alias eth0 3c90x 
+
+    To enable additional supported EtherLink NICs, create additional 
+    aliases, such as:
+
+	    alias eth1 3c90x 
+	    alias eth2 3c90x 
+
+
+  Using 3c90x and 3c59x drivers
+  ------------------------------
+    The 3C90x driver for Linux supports the "B" and "C" models of the 
+    EtherLink 3C90x NIC family (see the supported NICs listed above).  
+    
+    Support for older 3C905, 3C900 and 3C59x NICs, as well as many current 
+    3Com NICs, is provided by the 3C59x driver in Linux.  
+    
+    Because both of these drivers support many of the same models of NICs, 
+    3Com recommends using the 3C90x driver module for the most recent NICs 
+    (those listed above), and the 3c59x driver for those older NICs 
+    not supported by the 3c90x driver.
+    
+    Both the 3C90x and 3C59x driver modules can be used at the same time.
+    However, to make sure that the 3C90x driver is used with the 
+    appropriate NIC, configure your system to load the 3C90x driver first.
+    This allows the 3C90x driver to attach itself to all of the NICs that 
+    it supports.  Once this is complete, the 3C59x driver can be loaded 
+    and used by your system for any remaining 3Com NICs that are not 
+    supported by the 3C90x driver.
+    
+    To accomplish this driver module loading order, it is important to
+    understand how both the 3C90x and 3C59x drivers scan the PCI slots 
+    for the presence of a suitable NIC, how the kernel module loading 
+    system works, and how the "eth0," "eth1," "eth2," etc. device names 
+    are assigned.
+    
+    Both of the 3C90x and 3C59x drivers attempt to locate all of the 
+    PCI network devices they support.  If the 3C90x driver first locates
+    three supported network devices, they will be named eth0, eth1, and
+    eth2.  If, subsequently, the 3C59x driver finds two devices, they 
+    will be named eth3 and eth4. (Note that the ethN devices names are 
+    assigned in a first-found order; this may not be what is requested 
+    in the /etc/conf.modules file.)
+
+    Both drivers scan for devices in PCI slot number order, beginning at 
+    slot 0, and scanning to slot 255.  Unfortunately, there is no 
+    standard for how PCI slots are numbered relative to their location 
+    in a PC; each PC vendor determines the numbering order of PCI slots.  
+    This means that the slots in which you have placed your NICs affects 
+    the order in which the NICs are "found" by the driver.  The 
+    device named eth0 will be the first device found and successfully 
+    scanned by the driver; eth1 will be the second Ethernet device; 
+    eth2 the third, and so on.  
+       
+    To ensure that the 3C90x driver module is the first to detect all
+    supported NICs, place an "alias eth0 3c90x" alias in 
+    /etc/conf.modules. 
+
+    Remember: ALL supported devices found by either the 3C90x or 3C59x 
+    driver will be used by that driver.  There is currently no way to 
+    control specific NIC-to-driver assignments.
+
+
+* Building the Driver
+---------------------
+    The 3C90x driver can be built either as a kernel loadable module, or 
+    it can be compiled directly into the kernel.
+
+    Building a loadable module:
+    ---------------------------
+    To build the 3c90x driver as a loadable module, you can either: 
+    + Use the provided batch files compile_UP or compile_SMP by typing
+	./compile_<UP or SMP> 
+	(UP for Uni-processor machine, SMP for multi-processor machine)
+    OR
+
+    + Compile the 3c90x.c source file with the following command:
+
+    gcc -c 3c90x.c -O2 -Wall -Wstrict-prototypes -fomit-frame-pointer \
+	       -fno-strength-reduce -pipe -m486 -malign-loops=2 \
+	       -malign-jumps=2 -malign-functions=2 -DCPU=486 \
+	       -DMODULE -D__KERNEL__
+
+    Additionally, you can modify this compile line by:
+    + Adding -DMODVERSIONS to the command line if your kernel was built 
+      with symbol versioning (RedHat, etc.)
+    + Adding -D__SMP__ to the command line for SMP support
+    + Adding -I/usr/src/linux/include to the command line if you've
+	upgraded the kernel (assuming kernel source is in /usr/src/linux/include)        
+    
+    To install a loadable module, enter the following command:
+    
+    insmod 3c90x.o
+
+    
+    Building the driver into the base kernel:
+    ----------------------------------------
+    These instructions are included as a courtesy to customers.  Technical
+    support will only be provided for installing the driver as a loadable
+    module.
+
+    To build the 3C90x driver into the base kernel, run the patch utility
+    to alter the original kernel source to include the 3C90x driver 
+    source, and then re-run the kernel configuration process.
+	
+    Note: It is assumed that the user understands how to configure and
+    build the Linux kernel, a process which is beyond the scope of this
+    document and not described here.
+	
+    Included with the 3C90x distribution tar file are two patch input files
+    named "patch-2.2.5" and "patch-2.0.36".  These are used to patch your
+    original kernel source.  Use the patch file that matches the version 
+    of your kernel source.
+	
+    CAUTION:  The following process MODIFIES your original kernel source	
+    code.  It is highly recommended that you backup your kernel source 
+    code if you are concerned about these modifications.
+	
+    To build the 3C90x driver into the base kernel:
+	
+    1.  Run the following command to patch your kernel source code
+        and replace the <kernel_src_root> with the root of your
+	    kernel source code:
+	  
+	    % patch -d <kernel_src_root> -p0 < <patchfile>
+	    
+	    NOTE:  <patchfile> is the name of the patch file (patch-2.2.5 or
+	    patch-2.0.36) that is appropriate for your kernel.  Both
+	    patch files are included with the driver:
+	  		
+        Use patch-2.2.5 for kernel versions 2.2.5-15 and 2.2.5-22.
+        Use patch-2.0.36 for kernel version 2.0.36-0.7.
+	
+        The root of your kernel source code may be /usr/src/linux.	    
+	    
+    2. After the patch has been applied successfully, reconfigure,
+       rebuild and reinstall your kernel.
+	
+       The patch applied to your kernel source updates the appropriate
+       files such that the "make config" process understands the new  
+       3c90x driver.  Be sure to configure 3Com networking, and specifically
+       support for the 3c90x driver.
+
+
+
+* Configuring the Driver 
+------------------------
+
+    The 3C90x driver supports the following options, which can be 
+    supplied as command line arguments to the insmod command or in the 
+    /etc/conf.modules file.  Unless otherwise stated, all settings take 
+    the form of:
+    	
+    <option>=value [,value...]
+	
+    NOTE:  If you use the conf.modules file to load the driver at
+    boot time, include the word "options" when configuring the driver.
+    For example:  options 3c90x full_duplex=0
+	
+    If you use command line insmod, do not include the word "option"
+    when configuring the driver.  For example:  insmod 3c90x full_duplex=0
+		
+                                                                              		
+  OPTION: media_select
+    Selects the media type of the NIC.  Note: Invalid combinations of
+    media_select and full_duplex are ignored by the driver.
+
+    0  NONE			[ Default ]
+    1  10BASE_T
+    2  10AUI
+    3  10BASE_2
+    4  100BASE_TX
+    5  100BASE_FX
+    6  10BASE_FL
+    7  AUTO_SELECT
+
+
+  OPTION: full_duplex
+    Allows overriding of the default duplex setting for the hardware.  
+    Note: Invalid combinations of media_select and full_duplex are ignored 
+    by the driver.
+
+    -  Hardware default	[ Default ]
+    0  Disabled
+    1  Enabled
+	
+
+  OPTION: flowcontrol
+    Sets flow control for the NIC.  Flow control for multiple NICs
+    can be set using commas (for example, flowcontrol=0,1,1,0).
+
+    1  Enabled		[ Default ]
+    0  Disabled
+
+ 
+  OPTION: switchdelay
+    Delays the driver initialization by three seconds to allow 
+    slower switches to respond to the NIC initialization.
+
+    0  Disabled		[ Default ]
+    1  Enabled
+
+
+
+  OPTION: downpoll
+    Sets the poll rate for the DPD, the rate at which the current DPD is 
+    polled for a new DPD to be processed when the next DPD pointer is 
+    empty, or to determine the timer expiration when a packet download 
+    is delayed. The only values that are allowed are 8 and 64.
+
+    8   2.56 microseconds	[ Default ]
+    64  20.48 microseconds
+
+
+ 
+   OPTION: debug
+    Enables debugging messages for particular sub-systems of the driver.  
+    The values below represent flag bits, which can be added together 
+    to enable debugging messages for the particular sub-systems.  In 
+    general, this option is useful to programmers only;  therefore, 
+    debugging output is only available when the driver is compiled with
+    DEBUG defined.
+
+     0x00  No debugging output	[ Default]
+     0x01  Initialization code messages
+     0x02  Function call entry/exit messages
+     0x04  Ioctl messages
+     0x08  Statistics messages
+     0x10  Send path messages
+     0x20  Receive path messages
+     0x40  Interrupt path messages
+
+
+* Support Information
+---------------------
+
+    E-mail Support:
+
+    - USA or Canada: 3COM_US_NIC_FAMILY@3COM.COM
+    - Mexico and Latin America: AMI_HD@3com.com
+    - Brazil: br-nicsupport@3com.com 
+    - Europe, Middle East and Africa: European_Technical_Support@3com.com
+    - Asia Pacific Rim: apr_technical_support@3com.com
+    - Source/binary name/location
+      (http://support.3com.com/infodeli/tools/nic/linux.htm )
+
+
+    Knowledgebase Support:
+    - http://knowledgebase.3com.com
+
+    Enhancement Requests:
+    - To request or submit driver modifications for 3Com consideration, go
+    to http://support.3com.com/infodeli/tools/nic/linuxrequest.htm to obtain
+    the form.
+
+
+* Additional Information
+------------------------
+
+    - Linux network driver site:
+	  http://cesdis.gsfc.nasa.gov/linux/drivers
+
+    - Detailed instructions for building a driver:
+	  http://cesdis.gsfc.nasa.gov/linux/misc/modules.html
+	
+    /usr/src/linux/Documentation
+	  
+	  
+
+3Com and EtherLink are registered trademarks of 3Com Corporation.
+
+
+                 <README.TXT - Release Notes v1.1)
+

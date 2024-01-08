@@ -1,0 +1,40 @@
+
+
+This is a loadable module for a accton ethernet parallel pocket
+adaptor. The adaptor is made by Accton in Tawain, but can be bought
+under different names like 'Trust' 'Networld' and several others.
+
+The original sources were provided by accton.com.tw. Thank you very
+much!
+
+8390.c and skeleton.c were used as starting point Thank you Donald
+Becker, excellent work!!
+
+The driver was written by Volker Mayer Zum Bexten and me over a period
+of several months.  This version is the second one that is being
+released to the public. We hope that a lot of people will find joy in
+using the driver.
+
+The driver will find it's own IO address and irq, but if you have a
+strange one, you can give them as command arguments:
+	insmod ethpk.o ethpk_io=0x378 ethpk_irq=7 
+There is a debug level with ethpk_debug.  Turning this on will fill
+your syslog file fast!!
+
+The driver is at the moment still a bit messy, but it works.  unpack
+the sources in an empty directory and compile them by issueing 'make'
+this will leave you with a loadable module 'ethpk.o'
+
+This second release is made for 1.3.35 kernel, it works like a
+charm. The source for 1.2.X kernel can be made available if you want,
+just mail me. The source is still a bit messy, but it works fine.For
+porblems with this driver please e-mail me at
+Ron.Smits@Netherlands.attgis.com
+
+
+	Happy netting!!
+
+
+
+
+
